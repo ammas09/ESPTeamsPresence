@@ -143,6 +143,8 @@ String activity = "";
 uint8_t state = SMODEINITIAL;
 uint8_t laststate = SMODEINITIAL;
 static unsigned long tsPolling = 0;
+static unsigned long tsTestLED = 0;
+static uint8_t indexTestLED = 0;
 uint8_t retries = 0;
 
 // Multicore
@@ -294,16 +296,62 @@ void setPresenceAnimation() {
 		setAnimation(0, FX_MODE_BREATH, WHITE);
 	}
 	if (activity.equals("InAMeeting")) {
-		setAnimation(0, FX_MODE_SCAN, RED);
+		setAnimation(0, FX_MODE_THEATER_CHASE, RED);
 	}	
 	if (activity.equals("Offline") || activity.equals("OffWork") || activity.equals("OutOfOffice") || activity.equals("PresenceUnknown")) {
 		setAnimation(0, FX_MODE_STATIC, BLACK);
 	}
 	if (activity.equals("Presenting")) {
-		setAnimation(0, FX_MODE_COLOR_WIPE, RED);
+		setAnimation(0, FX_MODE_RUNNING_LIGHTS, RED);
 	}
 }
 
+#ifdef LEDTESTMODE
+const String testStatusLED[] = {
+	"Available", 
+	"Away", 
+	"BeRightBack", 
+	"Busy", 
+	"DoNotDisturb",
+	"InACall", 
+	"InAConferenceCall", 
+	"Inactive", 
+	"InAMeeting", 
+	// "Offline", 					// FX_MODE_STATIC, BLACK
+	// "OffWork", 					// FX_MODE_STATIC, BLACK
+	// "OutOfOffice", 				// FX_MODE_STATIC, BLACK
+	// "PresenceUnknown", 			// FX_MODE_STATIC, BLACK
+	"Presenting", 
+	// "UrgentInterruptionsOnly"	// same as DoNotDisturb
+};
+#endif
+
+// run through different LED animations
+void TestSequenceLED() {
+	#ifdef LEDTESTMODE
+	#if (0 == LEDTESTMODE)
+	if (millis() >= tsTestLED) {
+		DBG_PRINTLN(F("LED Test - Force fixed mode."));
+		setAnimation(0, FX_MODE_RUNNING_LIGHTS, RED);
+		tsTestLED = millis() + (30 * 1000);
+	}
+	#else
+	if (millis() >= tsTestLED) {
+		DBG_PRINTLN(F("LED Test - Update simulated presence info ..."));
+		availability = testStatusLED[indexTestLED];
+		activity = testStatusLED[indexTestLED];
+		uint8_t numTestStrings = sizeof(testStatusLED) / sizeof(testStatusLED[0]);
+		indexTestLED++;
+		if(numTestStrings <= indexTestLED) {
+			indexTestLED = 0;
+		}
+		setPresenceAnimation();
+		tsTestLED = millis() + (LEDTESTMODE * 1000);
+		Serial.printf("--> Availability: %s, Activity: %s\n\n", availability.c_str(), activity.c_str());
+	}
+	#endif
+	#endif
+}
 
 /**
  * Application logic
@@ -562,6 +610,10 @@ void setup()
 		DBG_PRINTLN(F("WARNING: Checking of HTTPS certificates disabled."));
 	#endif
 
+	#ifdef LEDTESTMODE
+		DBG_PRINTLN(F("Running LED test mode"));
+	#endif
+
 	// WS2812FX
 	ws2812fx.init();
 	rmt_tx_int(RMT_CHANNEL_0, ws2812fx.getPin());
@@ -571,9 +623,11 @@ void setup()
 	// iotWebConf - Initializing the configuration.
 	// Using LED_BUILTIN causes issues on the env:esp32-c3-devkitc-02 board 
 	// since the LED_BUILTIN is an addressable LED
-	// #ifdef LED_BUILTIN
-	// iotWebConf.setStatusPin(LED_BUILTIN);
-	// #endif
+	#ifndef IGNORELEDBUILTIN
+	#ifdef LED_BUILTIN
+	iotWebConf.setStatusPin(LED_BUILTIN);
+	#endif
+	#endif
 	iotWebConf.setWifiConnectionTimeoutMs(5000);
 	iotWebConf.addParameter(&separator);
 	iotWebConf.addParameter(&paramClientId);
@@ -642,8 +696,12 @@ void setup()
 
 void loop()
 {
+	#ifdef LEDTESTMODE
+	TestSequenceLED();
+	#else
 	// iotWebConf - doLoop should be called as frequently as possible.
 	iotWebConf.doLoop();
 
 	statemachine();
+	#endif
 }
