@@ -259,13 +259,17 @@ void startMDNS() {
 void setAnimation(uint8_t segment, uint8_t mode = FX_MODE_STATIC, uint32_t color = RED, uint16_t speed = 3000, bool reverse = false) {
 	uint16_t startLed, endLed = 0;
 
-	// Support only one segment for the moment
+	// Support only one main segment for the moment
 	if (segment == 0) {
-		startLed = 0;
-		endLed = numberLeds;
+		//Shift by one for segment 0, segment 1 is the first led only
+		startLed = 1;
+		endLed = numberLeds+1;
 	}
 	Serial.printf("setAnimation: %d, %d-%d, Mode: %d, Color: %d, Speed: %d\n", segment, startLed, endLed, mode, color, speed);
 	ws2812fx.setSegment(segment, startLed, endLed, mode, color, speed, reverse);
+
+	// split out the first led to be used as a separate segment
+	ws2812fx.setSegment(1, 0, 0, mode, color, speed, reverse);
 }
 
 void setPresenceAnimation() {
@@ -649,7 +653,7 @@ void setup()
 		DBG_PRINTLN(F("Number of LEDs not given, using 16."));
 		numberLeds = NUMLEDS;
 	}
-	ws2812fx.setLength(numberLeds);
+	ws2812fx.setLength(numberLeds+1);
 	ws2812fx.setCustomShow(customShow);
 
 	// HTTP server - Set up required URL handlers on the web server.
