@@ -28,6 +28,8 @@
 // #define DATAPIN 26							// GPIO pin used to drive the LED strip (20 == GPIO/D13) (if not set via build flags)
 // #define DISABLECERTCHECK 1					// Uncomment to disable https certificate checks (if not set via build flags)
 // #define STATUS_PIN LED_BUILTIN				// User builtin LED for status (if not set via build flags)
+// #define HBNUMLEDS 1 							// Number of LEDs on the heartbeat strip (if not set via build flags)
+// #define HBDATAPIN 8 							// GPIO pin used to drive the heartbeat LED strip (8 == RGB LED on esp32-c3-devkitc-02) (if not set via build flags)
 #define DEFAULT_POLLING_PRESENCE_INTERVAL "30"	// Default interval to poll for presence info (seconds)
 #define DEFAULT_ERROR_RETRY_INTERVAL 30			// Default interval to try again after errors
 #define TOKEN_REFRESH_TIMEOUT 60	 			// Number of seconds until expiration before token gets refreshed
@@ -112,6 +114,9 @@ WiFiClientSecure client;
 
 // WS2812FX
 WS2812FX ws2812fx = WS2812FX(NUMLEDS, DATAPIN, NEO_GRB + NEO_KHZ800);
+#ifdef USEHBLED
+WS2812FX hb_led = WS2812FX(HBNUMLEDS, HBDATAPIN, NEO_GRB + NEO_KHZ800);
+#endif
 int numberLeds;
 
 // OTA update
@@ -270,6 +275,22 @@ void setAnimation(uint8_t segment, uint8_t mode = FX_MODE_STATIC, uint32_t color
 
 	// split out the first led to be used as a separate segment
 	ws2812fx.setSegment(1, 0, 0, mode, color, speed, reverse);
+
+	#ifdef USEHBLED
+		if (SMODEPOLLPRESENCE == state)
+		{
+			if(BLACK == color)
+			{
+    			hb_led.setMode(FX_MODE_BREATH);
+				hb_led.setColor(BLUE);
+			}
+			else
+			{
+    			hb_led.setMode(FX_MODE_BREATH);
+				hb_led.setColor(BLACK);
+			}
+		}
+	#endif
 }
 
 void setPresenceAnimation() {
@@ -483,7 +504,12 @@ void statemachine() {
 	if (iotWebConfState != lastIotWebConfState) {
 		if (iotWebConfState == IOTWEBCONF_STATE_NOT_CONFIGURED || iotWebConfState == IOTWEBCONF_STATE_AP_MODE) {
 			DBG_PRINTLN(F("Detected AP mode"));
-			setAnimation(0, FX_MODE_THEATER_CHASE, WHITE);
+			#ifdef USEHBLED
+				hb_led.setColor(WHITE);
+				hb_led.setMode(FX_MODE_THEATER_CHASE);
+			#else
+				setAnimation(0, FX_MODE_THEATER_CHASE, WHITE);
+			#endif
 		}
 		if (iotWebConfState == IOTWEBCONF_STATE_CONNECTING) {
 			DBG_PRINTLN(F("WiFi connecting"));
@@ -494,13 +520,23 @@ void statemachine() {
 
 	// Statemachine: Wifi connection start
 	if (state == SMODEWIFICONNECTING && laststate != SMODEWIFICONNECTING) {
-		setAnimation(0, FX_MODE_THEATER_CHASE, BLUE);
+		#ifdef USEHBLED
+			hb_led.setColor(BLUE);
+			hb_led.setMode(FX_MODE_THEATER_CHASE);
+		#else
+			setAnimation(0, FX_MODE_THEATER_CHASE, BLUE);
+		#endif
 	}
 
 	// Statemachine: After wifi is connected
 	if (state == SMODEWIFICONNECTED && laststate != SMODEWIFICONNECTED)
 	{
-		setAnimation(0, FX_MODE_THEATER_CHASE, GREEN);
+		#ifdef USEHBLED
+			hb_led.setColor(GREEN);
+			hb_led.setMode(FX_MODE_THEATER_CHASE);
+		#else
+			setAnimation(0, FX_MODE_THEATER_CHASE, GREEN);
+		#endif
 		startMDNS();
 		loadContext();
 		// WiFi client
@@ -510,7 +546,12 @@ void statemachine() {
 	// Statemachine: Devicelogin started
 	if (state == SMODEDEVICELOGINSTARTED) {
 		if (laststate != SMODEDEVICELOGINSTARTED) {
-			setAnimation(0, FX_MODE_THEATER_CHASE, PURPLE);
+			#ifdef USEHBLED
+				hb_led.setColor(PURPLE);
+				hb_led.setMode(FX_MODE_THEATER_CHASE);
+			#else
+				setAnimation(0, FX_MODE_THEATER_CHASE, PURPLE);
+			#endif
 		}
 		if (millis() >= tsPolling) {
 			pollForToken();
@@ -549,7 +590,12 @@ void statemachine() {
 	// Statemachine: Refresh token
 	if (state == SMODEREFRESHTOKEN) {
 		if (laststate != SMODEREFRESHTOKEN) {
-			setAnimation(0, FX_MODE_THEATER_CHASE, RED);
+			#ifdef USEHBLED
+				hb_led.setColor(RED);
+				hb_led.setMode(FX_MODE_THEATER_CHASE);
+			#else
+				setAnimation(0, FX_MODE_THEATER_CHASE, RED);
+			#endif
 		}
 		if (millis() >= tsPolling) {
 			boolean success = refreshToken();
@@ -588,6 +634,9 @@ void statemachine() {
 void neopixelTask(void * parameter) {
 	for (;;) {
 		ws2812fx.service();
+		#ifdef USEHBLED
+			hb_led.service();
+		#endif
 		vTaskDelay(10);
 	}
 }
@@ -600,6 +649,15 @@ void customShow(void) {
 	rmt_write_sample(RMT_CHANNEL_0, pixels, numBytes, false); // channel 0
 }
 
+#ifdef USEHBLED
+void customHbShow(void) {
+	uint8_t *pixels = hb_led.getPixels();
+	// numBytes is one more then the size of the ws2812fx's *pixels array.
+	// the extra byte is used by the driver to insert the LED reset pulse at the end.
+	uint16_t numBytes = hb_led.getNumBytes() + 1;
+	rmt_write_sample(RMT_CHANNEL_1, pixels, numBytes, false); // channel 0
+}
+#endif
 
 /**
  * Main functions
@@ -622,7 +680,23 @@ void setup()
 	ws2812fx.init();
 	rmt_tx_int(RMT_CHANNEL_0, ws2812fx.getPin());
 	ws2812fx.start();
-	setAnimation(0, FX_MODE_STATIC, WHITE);
+	#ifdef USEHBLED
+		setAnimation(0, FX_MODE_STATIC, BLACK);
+	#else
+		setAnimation(0, FX_MODE_STATIC, WHITE);
+	#endif
+
+	#ifdef USEHBLED
+		hb_led.init();
+		rmt_tx_int(RMT_CHANNEL_1, hb_led.getPin());
+		// hb_led.setSegment(2, 0, 0, FX_MODE_BREATH, BLUE, 3000);
+		hb_led.setLength(1);
+		hb_led.setSpeed(3000);
+		hb_led.setColor(BLUE);
+		hb_led.setMode(FX_MODE_BREATH);
+		hb_led.setCustomShow(customHbShow);
+		hb_led.start();
+	#endif
 
 	// iotWebConf - Initializing the configuration.
 	// Using LED_BUILTIN causes issues on the env:esp32-c3-devkitc-02 board 
