@@ -4,6 +4,14 @@
 ![](https://github.com/toblum/ESPTeamsPresence/workflows/BuildAndRelease/badge.svg)
 ![](https://img.shields.io/github/v/release/toblum/ESPTeamsPresence)
 
+## Project Status: Paused
+Unfortunately, I am no longer able to actively support or update this project. The primary reason for this is that I no longer have access to a dedicated M365 development tenant/sandbox, compounded by a general lack of time.
+
+Please note that the longevity of the built-in app registration is uncertain, and you may need to create your own.
+
+I will keep this repository online for anyone interested in its current state, but please understand that I can no longer provide active support. I may revisit this project in the future if circumstances change.
+
+---
 
 **A standalone Microsoft Teams presence light based on ESP32 and RGB neopixel LEDs.**
 

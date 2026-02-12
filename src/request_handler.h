@@ -23,7 +23,10 @@ boolean requestJsonApi(JsonDocument& doc, String url, String payload = "", size_
 	} else {
 		client->setCACert(rootCACertificateLogin);
 	}
+	#else
+	client->setInsecure();
 	#endif
+
 
 	// HTTPClient
 	HTTPClient https;
